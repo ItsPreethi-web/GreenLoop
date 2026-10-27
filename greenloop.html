@@ -320,18 +320,22 @@ function applyRemoteMethod(data){
   if(data.waste_factors)CATS.forEach(function(c){var f=data.waste_factors[c];if(f){FACT[c].mixed=f.mixed;FACT[c].seg=f.segregated;}});
   memo={};
 }
+function acceptBootstrap(data){
+  applyApiState(data.state);
+  REMOTE.dashboard=data.dashboard;
+  REMOTE.allDashboard=data.all_dashboard;
+  REMOTE.actions=data.actions;
+  REMOTE.leaderboard=data.leaderboard;
+  applyRemoteMethod(data.method);
+  render();
+}
 function refreshRemote(force){
   if(!apiReady||remoteLoading)return;
   if(!force&&remoteScope===U.scope)return;
   var requestedScope=U.scope;remoteScope=requestedScope;remoteLoading=true;
-  var offset=new Date().getTimezoneOffset(),q='?scope='+encodeURIComponent(U.scope);
-  Promise.all([
-    fetch('/api/dashboard'+q+'&utc_offset_minutes='+offset).then(function(r){if(!r.ok)throw new Error('dashboard '+r.status);return r.json();}),
-    fetch('/api/dashboard?scope=all&utc_offset_minutes='+offset).then(function(r){if(!r.ok)throw new Error('campus dashboard '+r.status);return r.json();}),
-    fetch('/api/actions'+q).then(function(r){if(!r.ok)throw new Error('actions '+r.status);return r.json();}),
-    fetch('/api/leaderboard').then(function(r){if(!r.ok)throw new Error('leaderboard '+r.status);return r.json();}),
-    fetch('/api/method').then(function(r){if(!r.ok)throw new Error('method '+r.status);return r.json();})
-  ]).then(function(items){REMOTE.dashboard=items[0];REMOTE.allDashboard=items[1];REMOTE.actions=items[2];REMOTE.leaderboard=items[3];applyRemoteMethod(items[4]);render();})
+  var url='/api/bootstrap?scope='+encodeURIComponent(U.scope)+'&utc_offset_minutes='+new Date().getTimezoneOffset();
+  fetch(url).then(function(r){if(!r.ok)throw new Error('bootstrap '+r.status);return r.json();})
+    .then(acceptBootstrap)
     .catch(function(){remoteScope=null;toast('Could not refresh the backend data.');})
     .finally(function(){remoteLoading=false;if(apiReady&&requestedScope!==U.scope)refreshRemote(false);});
 }
@@ -352,7 +356,7 @@ function refreshClassification(){
     .catch(function(){toast('Could not get the waste estimate from the backend.');})
     .finally(function(){scanPending=false;});
 }
-if(location.protocol!=='file:')fetch('/api/state').then(function(r){if(!r.ok)throw new Error('API unavailable');return r.json();}).then(function(state){apiReady=true;applyApiState(state);refreshRemote(true);render();}).catch(function(){});
+if(location.protocol!=='file:')fetch('/api/bootstrap?scope='+encodeURIComponent(U.scope)+'&utc_offset_minutes='+new Date().getTimezoneOffset()).then(function(r){if(!r.ok)throw new Error('API unavailable');return r.json();}).then(function(data){apiReady=true;remoteScope=U.scope;acceptBootstrap(data);}).catch(function(){});
 function isAdopted(b,a){return !!(S.adopted[b.id]&&S.adopted[b.id][a.id]);}
 function adoptedKgDay(b){var s=0;ACTIONS.forEach(function(a){if(isAdopted(b,a)){var c=a.calc(b);if(c)s+=c.kg/7;}});return s;}
 function scopeBlocks(){return U.scope==='all'?BLOCKS:BLOCKS.filter(function(b){return b.id===U.scope;});}
@@ -640,7 +644,7 @@ setInterval(function(){
   if(U.view!=='overview')return;
   if(apiReady)refreshDashboard();else{var hb=$('#heroBlock'),ll=$('#liveList');if(hb)hb.innerHTML=heroHTML();if(ll)ll.innerHTML=liveHTML();}
 },10000);
-setInterval(function(){if(U.view==='overview'){if(apiReady)refreshDashboard();else drawCharts();}},30000);
+setInterval(function(){if(U.view==='overview'&&!apiReady)drawCharts();},30000);
 var rt;if(window.ResizeObserver){new ResizeObserver(function(){clearTimeout(rt);rt=setTimeout(function(){if(U.view==='overview')drawCharts();},120);}).observe(view);}
 render();
 })();

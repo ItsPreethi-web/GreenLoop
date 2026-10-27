@@ -123,11 +123,8 @@ def get_state() -> dict[str, Any]:
     return current_state()
 
 
-@app.get("/api/dashboard")
-def dashboard(scope: str = "all", utc_offset_minutes: int = 0) -> dict[str, Any]:
-    current_factors()
+def _dashboard_payload(scope: str, utc_offset_minutes: int, state: dict[str, Any]) -> dict[str, Any]:
     blocks = scoped_blocks(scope)
-    state = current_state()
     now = datetime.now(timezone.utc).astimezone(timezone(timedelta(minutes=-utc_offset_minutes)))
     elapsed = now.hour + now.minute / 60 + now.second / 3600
     previous = {key: sum(block_day(block, 1, elapsed)[key] for block in blocks) for key in totals(blocks, elapsed)}
@@ -146,11 +143,14 @@ def dashboard(scope: str = "all", utc_offset_minutes: int = 0) -> dict[str, Any]
     }
 
 
-@app.get("/api/actions")
-def get_actions(scope: str = "all") -> list[dict[str, Any]]:
+@app.get("/api/dashboard")
+def dashboard(scope: str = "all", utc_offset_minutes: int = 0) -> dict[str, Any]:
     current_factors()
+    return _dashboard_payload(scope, utc_offset_minutes, current_state())
+
+
+def _actions_payload(scope: str, state: dict[str, Any]) -> list[dict[str, Any]]:
     blocks = scoped_blocks(scope)
-    state = current_state()
     adopted = {(row["block_id"], row["action_id"]) for row in state["adopted"]}
     result = []
     for action in ACTIONS:
@@ -162,6 +162,12 @@ def get_actions(scope: str = "all") -> list[dict[str, Any]]:
         if per_block:
             result.append({**action, "kg_co2e_week": sum(row["kg_co2e_week"] for row in per_block), "kwh_week": sum(row["kwh_week"] for row in per_block), "water_kl_week": sum(row["water_kl_week"] for row in per_block), "adopted": all(row["adopted"] for row in per_block), "blocks": per_block})
     return sorted(result, key=lambda row: row["kg_co2e_week"], reverse=True)
+
+
+@app.get("/api/actions")
+def get_actions(scope: str = "all") -> list[dict[str, Any]]:
+    current_factors()
+    return _actions_payload(scope, current_state())
 
 
 @app.post("/api/actions/{action_id}/adopt")
@@ -246,7 +252,10 @@ def log_waste(request: WasteLogRequest) -> dict[str, Any]:
 @app.get("/api/leaderboard")
 def leaderboard() -> list[dict[str, Any]]:
     current_factors()
-    state = current_state()
+    return _leaderboard_payload(current_state())
+
+
+def _leaderboard_payload(state: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
     for block in BLOCKS:
         if not block["ranked"]:
@@ -263,7 +272,10 @@ def _seven_day_average_net(block: dict[str, Any]) -> float:
 
 @app.get("/api/method")
 def method() -> dict[str, Any]:
-    factors = current_factors()
+    return _method_payload(current_factors())
+
+
+def _method_payload(factors: dict[str, Any]) -> dict[str, Any]:
     return {
         "factors": {"grid_kg_co2e_per_kwh": factors["grid_kg_co2e_per_kwh"], "pump_kwh_per_kl": factors["pump_kwh_per_kl"]},
         "waste_factors": FACTORS,
@@ -276,6 +288,21 @@ def method() -> dict[str, Any]:
             "waste_points": "round(kg CO2e saved * 10)",
         },
         "reading_mode": "software-simulated",
+    }
+
+
+@app.get("/api/bootstrap")
+def bootstrap(scope: str = "all", utc_offset_minutes: int = 0) -> dict[str, Any]:
+    """Load all initial dashboard data using one HTTP request and shared DB reads."""
+    factors = current_factors()
+    state = current_state()
+    return {
+        "state": state,
+        "dashboard": _dashboard_payload(scope, utc_offset_minutes, state),
+        "all_dashboard": _dashboard_payload("all", utc_offset_minutes, state),
+        "actions": _actions_payload(scope, state),
+        "leaderboard": _leaderboard_payload(state),
+        "method": _method_payload(factors),
     }
 
 
