@@ -1,0 +1,11 @@
+# Local Supabase credentials
+backend/.env
+
+# Python environments and generated files
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+
+# Local development clutter
+.DS_Store
+Thumbs.db

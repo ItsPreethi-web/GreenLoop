@@ -1,0 +1,647 @@
+<title>GreenLoop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: ledger-first dashboard. Hero figure with its equation on the left, live block load on the right,
+   charts below, then tabs for ranked actions, the block leaderboard, waste scan and method. */
+:root{
+  --bg:#eef2ed; --surface:#fcfcfb; --ink:#10231b; --ink2:#4a5a51; --muted:#667369;
+  --line:#dde4dd; --grid:#e1e0d9; --axis:#c3c2b7; --track:#e4eae5;
+  --brand:#0b6b46; --brand-ink:#ffffff; --brand-soft:#dcefe4;
+  --good:#006300; --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --font-ui:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1310; --surface:#1a1a19; --ink:#eef1ec; --ink2:#c3c8c0; --muted:#98a39c;
+    --line:#2a312d; --grid:#2c2c2a; --axis:#383835; --track:#2a312d;
+    --brand:#4fc08a; --brand-ink:#06150e; --brand-soft:#1b2e24;
+    --good:#0ca30c; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1310; --surface:#1a1a19; --ink:#eef1ec; --ink2:#c3c8c0; --muted:#98a39c;
+  --line:#2a312d; --grid:#2c2c2a; --axis:#383835; --track:#2a312d;
+  --brand:#4fc08a; --brand-ink:#06150e; --brand-soft:#1b2e24;
+  --good:#0ca30c; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.5;
+  padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.shell{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3,p{margin:0}
+h2{font-size:1.05rem;font-weight:650;letter-spacing:-.005em;text-wrap:balance}
+h3{font-size:.95rem;font-weight:650}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
+
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:10px;color:var(--brand)}
+.brand b{font-size:1.35rem;font-weight:700;letter-spacing:-.02em;color:var(--ink)}
+.brand span{font-size:.8rem;color:var(--muted);display:block;line-height:1.1}
+.top-r{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.live{display:inline-flex;align-items:center;gap:7px;font-size:.8rem;color:var(--ink2)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--brand);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}}
+.scope{display:inline-flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted)}
+select,input[type=number]{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px}
+
+.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);scrollbar-width:thin}
+.tabs button{background:none;border:0;padding:10px 14px;color:var(--ink2);font-weight:550;white-space:nowrap;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected=true]{color:var(--brand);border-bottom-color:var(--brand)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.rowA{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px}
+.row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:16px}
+@media (max-width:820px){.rowA{grid-template-columns:minmax(0,1fr)}}
+.eyebrow{font-size:.75rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.sub{font-size:.85rem;color:var(--muted)}
+.hero-num{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin-top:6px}
+.hero-num strong{font-size:clamp(3rem,9vw,4.5rem);font-weight:700;letter-spacing:-.035em;line-height:1}
+.hero-num span{font-size:1.1rem;color:var(--ink2);font-weight:550}
+.delta{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;font-weight:600;margin-top:8px}
+.delta.good{color:var(--good)} .delta.bad{color:var(--ink)}
+.proj{margin-top:6px;font-size:.85rem;color:var(--ink2)}
+.ledger{margin:18px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
+.ledger li{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:4px 12px;align-items:baseline;padding:9px 0;border-top:1px solid var(--line)}
+.ledger .sw{width:10px;height:10px;border-radius:3px;align-self:center}
+.ledger .nm{font-weight:600}
+.ledger .bs{display:block;font-family:var(--font-mono);font-size:.72rem;color:var(--muted);font-weight:400;overflow-wrap:anywhere}
+.ledger .v{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.ledger li.net{border-top:2px solid var(--ink);font-size:1.05rem}
+.ledger li.net .v{font-weight:700}
+
+.live-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.live-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:9px 8px;border-radius:8px}
+.live-list li.sel{background:var(--brand-soft)}
+.live-list .nm{font-weight:600}
+.live-list .kw{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.live-list .meta{font-size:.78rem;color:var(--muted)}
+.meter{grid-column:1/-1;height:6px;border-radius:3px;background:var(--track);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--s1);border-radius:3px}
+
+.ph{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:flex-start}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{background:none;border:0;padding:5px 11px;font-size:.8rem;cursor:pointer;color:var(--ink2)}
+.seg button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin:10px 0 4px;font-size:.8rem;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.chart{position:relative;margin-top:6px;min-height:240px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font-family:var(--font-ui);font-size:11px;fill:var(--muted)}
+.chart text.lab{fill:var(--ink2);font-weight:600}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.45;white-space:nowrap;z-index:3;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.tip b{display:block;margin-bottom:2px}
+.tip i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.tablewrap{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}
+
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;letter-spacing:.03em;padding:2px 9px;border-radius:99px;background:var(--track);color:var(--ink2);white-space:nowrap}
+.chip.pts{background:var(--brand-soft);color:var(--brand)}
+.btn{background:var(--brand);color:var(--brand-ink);border:0;border-radius:9px;padding:9px 16px;font-weight:600;cursor:pointer;min-height:38px}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{background:none;color:var(--brand);border:1px solid var(--brand)}
+.btn[disabled]{opacity:.5;cursor:default}
+
+.recs{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.rec{display:grid;grid-template-columns:34px minmax(0,1fr);gap:4px 14px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.rec .rk{font-size:1.5rem;font-weight:700;color:var(--brand);line-height:1.1}
+.rec .hd{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}
+.rec .why{font-size:.85rem;color:var(--ink2);margin-top:2px}
+.rec .big{display:flex;align-items:baseline;gap:8px;margin-top:10px;flex-wrap:wrap}
+.rec .big strong{font-size:1.6rem;font-weight:700;letter-spacing:-.02em}
+.rec .bar{height:8px;border-radius:4px;background:var(--track);margin-top:6px;overflow:hidden}
+.rec .bar i{display:block;height:100%;background:var(--s1);border-radius:4px}
+.rec .fx{font-family:var(--font-mono);font-size:.72rem;color:var(--muted);margin-top:8px;overflow-wrap:anywhere}
+.rec .ft{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-top:12px}
+.rec.done{background:var(--brand-soft);border-color:transparent}
+.minor{list-style:none;margin:10px 0 0;padding:0}
+.minor li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 14px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.minor .num{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+
+.board{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.board li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:4px 14px;align-items:center;padding:12px 10px;border-radius:10px}
+.board li:nth-child(odd){background:var(--bg)}
+.board .rk{font-size:1.25rem;font-weight:700;color:var(--brand)}
+.board .nm{font-weight:650}
+.board .bar{height:8px;border-radius:4px;background:var(--track);margin-top:6px;overflow:hidden}
+.board .bar i{display:block;height:100%;background:var(--s1);border-radius:4px}
+.board .val{text-align:right;font-variant-numeric:tabular-nums}
+.board .val strong{font-size:1.05rem}
+.board .sub2{grid-column:2/-1;display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.78rem;color:var(--muted)}
+
+.scan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:820px){.scan{grid-template-columns:minmax(0,1fr)}}
+.stage{aspect-ratio:4/3;max-width:100%;border:1px dashed var(--axis);border-radius:12px;display:grid;place-items:center;overflow:hidden;background:var(--bg)}
+.stage img{width:100%;height:100%;object-fit:cover}
+.stage svg{width:42%;height:auto;stroke:var(--ink2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chips button{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:7px 14px;cursor:pointer;font-weight:550}
+.chips button[aria-pressed=true]{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.field{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted)}
+.fields{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+.probs{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.probs div{display:grid;grid-template-columns:70px minmax(0,1fr) 46px;gap:10px;align-items:center;font-size:.85rem}
+.probs .b{height:8px;border-radius:4px;background:var(--track);overflow:hidden}
+.probs .b i{display:block;height:100%;background:var(--s1);border-radius:4px}
+.probs .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.note{font-size:.8rem;color:var(--muted);margin-top:10px}
+.result{margin-top:14px;padding:14px;border-radius:12px;background:var(--brand-soft)}
+.result strong{font-size:1.15rem}
+.loglist{list-style:none;margin:10px 0 0;padding:0;font-size:.85rem}
+.loglist li{padding:8px 0;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between}
+
+.mono{font-family:var(--font-mono);font-size:.82rem}
+.calc{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}
+.calc li{display:grid;grid-template-columns:130px minmax(0,1fr);gap:4px 14px;padding:10px 0;border-top:1px solid var(--line)}
+@media (max-width:560px){.calc li{grid-template-columns:minmax(0,1fr)}}
+.flow{display:flex;flex-wrap:wrap;gap:10px;list-style:none;margin:14px 0 0;padding:0;counter-reset:f}
+.flow li{flex:1 1 150px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;counter-increment:f;font-size:.85rem;color:var(--ink2)}
+.flow li::before{content:counter(f);display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--brand);color:var(--brand-ink);font-weight:700;font-size:.75rem;margin-bottom:6px}
+.flow b{display:block;color:var(--ink)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+footer{font-size:.78rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between;padding-top:6px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:10px;font-size:.88rem;max-width:min(92vw,520px);box-shadow:0 6px 24px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+#toast.on{opacity:1}
+</style>
+
+<div class="shell">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><path d="M16 4a12 12 0 1 0 12 12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M16 23c-5-1-7-5-6-10 5 0 9 2 9 7 0 1-1 2-3 3z" fill="currentColor"/><circle cx="27" cy="9" r="2.4" fill="currentColor"/></svg>
+      <div><b>GreenLoop</b><span>Campus carbon ledger</span></div>
+    </div>
+    <div class="top-r">
+      <span class="live"><i></i>Simulated live feed</span>
+      <label class="scope">Showing <select id="scope" aria-label="Block to show"></select></label>
+    </div>
+  </header>
+  <nav class="tabs" role="tablist" aria-label="Sections" id="tabs"></nav>
+  <main id="view"></main>
+  <footer>
+    <span>Prototype by Team Pentaforce (DEX26266), Sathyabama Institute of Science and Technology. Meter readings, waste volumes and classifier output are simulated.</span>
+    <span>SDG 7 · 11 · 12 · 13 · 6</span>
+  </footer>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+/* ================= ENGINE (pure, no DOM) ================= */
+var CO2='CO₂e';
+var P={grid:0.71,pump:0.45};          // kg CO2e per kWh (CEA-style grid factor, editable); kWh pumped per kL
+var CATS=['organic','paper','plastic','glass','metal'];
+// kg CO2e per kg of waste. mixed = unsegregated disposal, seg = segregated and composted/recycled (can be negative).
+var FACT={
+  organic:{name:'Organic',mixed:0.58,seg:0.10,bin:'Wet waste, compost',src:'IPCC 2006 Vol. 5 / US EPA WARM'},
+  paper:{name:'Paper',mixed:0.45,seg:-0.70,bin:'Dry waste, paper',src:'US EPA WARM'},
+  plastic:{name:'Plastic',mixed:1.00,seg:-0.60,bin:'Dry waste, plastic',src:'US EPA WARM / IPCC 2006 Vol. 5'},
+  glass:{name:'Glass',mixed:0.02,seg:-0.30,bin:'Dry waste, glass',src:'US EPA WARM'},
+  metal:{name:'Metal',mixed:0.02,seg:-2.00,bin:'Dry waste, metal',src:'US EPA WARM'}
+};
+var MIX={def:{organic:.46,paper:.20,plastic:.20,glass:.08,metal:.06},academic:{organic:.30,paper:.38,plastic:.22,glass:.05,metal:.05}};
+var BLOCKS=[
+  {id:'ha',name:'Hostel A',kind:'hostel',people:380,peak:95,kwp:50,water:135,waste:.42,seg:.35,seed:11},
+  {id:'hb',name:'Hostel B',kind:'hostel',people:360,peak:88,kwp:30,water:135,waste:.40,seg:.50,seed:23},
+  {id:'hc',name:'Hostel C',kind:'hostel',people:300,peak:80,kwp:0,water:135,waste:.41,seg:.25,seed:37},
+  {id:'ap',name:'Apartments D',kind:'apartment',people:210,peak:58,kwp:20,water:150,waste:.50,seg:.40,seed:41},
+  {id:'sq',name:'Staff Quarters',kind:'apartment',people:120,peak:30,kwp:10,water:150,waste:.45,seg:.30,seed:53},
+  {id:'ac',name:'Academic Block',kind:'academic',people:900,peak:260,kwp:150,water:25,waste:.20,seg:.45,seed:67,ranked:false}
+];
+function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
+function rnd(n){var t=(n|0)+0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;}
+function noise(seed,d,h){return rnd(seed*7919+d*131+h*17+3)*2-1;}
+function g(h,m,s){return Math.exp(-0.5*Math.pow((h-m)/s,2));}
+function prof(kind,h){
+  if(kind==='hostel')return .30+.28*g(h,7.5,1.4)+.18*g(h,13,2.5)+.70*g(h,20.5,2.4);
+  if(kind==='apartment')return .28+.35*g(h,7,1.3)+.72*g(h,20,2.3)+.12*g(h,13,3);
+  return .16+.84*g(h,12.5,3.4);
+}
+function loadKw(b,d,h){return b.peak*prof(b.kind,h+.5)*(1+.05*noise(b.seed,d,h))*(1+.04*noise(b.seed,d,99));}
+function cloud(d){return .62+.38*rnd(d*53+5);}
+function solarKw(b,d,h){
+  if(!b.kwp)return 0;
+  var s=Math.sin(Math.PI*(h+.5-6)/12); if(s<=0)return 0;
+  return b.kwp*.78*Math.pow(s,1.2)*cloud(d)*(1+.04*noise(b.seed,d,h+40));
+}
+function waterKl(b,d){return b.people*b.water/1000*(1+.06*noise(b.seed,d,77));}
+function wasteKg(b,d){
+  var tot=b.people*b.waste*(1+.08*noise(b.seed,d,88)),mix=MIX[b.kind==='academic'?'academic':'def'],o={};
+  CATS.forEach(function(c){o[c]=tot*mix[c];}); return o;
+}
+function zeroCats(){return{organic:0,paper:0,plastic:0,glass:0,metal:0};}
+// Totals for day d (0 = today) up to hour upTo, summed over the given blocks.
+function dayTotals(bl,d,upTo){
+  var r={elecKwh:0,solarKwh:0,waterKl:0,cats:zeroCats(),kgWaste:0},f=clamp(upTo/24,0,1);
+  bl.forEach(function(b){
+    for(var h=0;h<24;h++){var w=clamp(upTo-h,0,1);if(w<=0)break;r.elecKwh+=loadKw(b,d,h)*w;r.solarKwh+=solarKw(b,d,h)*w;}
+    r.waterKl+=waterKl(b,d)*f;
+    var wk=wasteKg(b,d);
+    CATS.forEach(function(c){var kg=wk[c]*f;r.cats[c]+=kg;r.kgWaste+=kg*(FACT[c].mixed*(1-b.seg)+FACT[c].seg*b.seg);});
+  });
+  r.wasteKg=CATS.reduce(function(s,c){return s+r.cats[c];},0);
+  r.kgElec=r.elecKwh*P.grid; r.kgWater=r.waterKl*P.pump*P.grid; r.kgSolar=r.solarKwh*P.grid;
+  r.kgGross=r.kgElec+r.kgWaste+r.kgWater; r.kgNet=r.kgGross-r.kgSolar;
+  return r;
+}
+var memo={};
+function avgDay(b){
+  var k=b.id+'|'+P.grid+'|'+P.pump; if(memo[k])return memo[k];
+  var a={elecKwh:0,waterKl:0,solarKwh:0,kgNet:0,cats:zeroCats()};
+  for(var d=1;d<=7;d++){var t=dayTotals([b],d,24);a.elecKwh+=t.elecKwh/7;a.waterKl+=t.waterKl/7;a.solarKwh+=t.solarKwh/7;a.kgNet+=t.kgNet/7;CATS.forEach(function(c){a.cats[c]+=t.cats[c]/7;});}
+  memo[k]=a; return a;
+}
+/* ---- Recommender: every action returns kg CO2e saved per week for one block, or null if it does not apply ---- */
+function pc(x){return Math.round(x*100)+'%';}
+function nf(n,d){d=d||0;return n.toLocaleString('en-IN',{maximumFractionDigits:d,minimumFractionDigits:d});}
+var ACTIONS=[
+  {id:'lights',name:'Put corridor and common-area lights on timers',effort:'Easy',
+   why:'Lights left on in empty corridors run all night. Occupancy sensors or timers cut that load.',
+   calc:function(b){var sh={hostel:.18,apartment:.15,academic:.20}[b.kind],A=avgDay(b),kwh=A.elecKwh*7*sh*.35;
+     return{kwh:kwh,kg:kwh*P.grid,fx:nf(A.elecKwh*7)+' kWh/wk × '+pc(sh)+' lighting share × 35% cut × '+P.grid};}},
+  {id:'ac',name:'Raise AC setpoints from 24 to 26 °C',effort:'Easy',
+   why:'Each degree of setpoint trims cooling energy. Needs only a notice and a default on the remotes.',
+   calc:function(b){var sh={hostel:.10,apartment:.22,academic:.38}[b.kind],A=avgDay(b),kwh=A.elecKwh*7*sh*.10;
+     return{kwh:kwh,kg:kwh*P.grid,fx:nf(A.elecKwh*7)+' kWh/wk × '+pc(sh)+' cooling share × 10% (2 °C × ~5%) × '+P.grid};}},
+  {id:'idle',name:'Switch off idle PCs and projectors after hours',effort:'Easy',
+   why:'Lab machines and projectors on standby draw power overnight and at weekends.',
+   calc:function(b){if(b.kind!=='academic')return null;var A=avgDay(b),kwh=A.elecKwh*7*.15*.40;
+     return{kwh:kwh,kg:kwh*P.grid,fx:nf(A.elecKwh*7)+' kWh/wk × 15% IT share × 40% cut × '+P.grid};}},
+  {id:'geyser',name:'Put geysers and water heaters on timers',effort:'Easy',
+   why:'Heaters kept hot all day lose energy. A morning and evening schedule covers real demand.',
+   calc:function(b){if(b.kind==='academic')return null;var sh=b.kind==='hostel'?.18:.12,A=avgDay(b),kwh=A.elecKwh*7*sh*.30;
+     return{kwh:kwh,kg:kwh*P.grid,fx:nf(A.elecKwh*7)+' kWh/wk × '+pc(sh)+' heating share × 30% cut × '+P.grid};}},
+  {id:'leaks',name:'Fix leaks and fit tap aerators',effort:'Easy',
+   why:'Saves water first and pumping energy second. The carbon gain is small, the water gain is not (SDG 6).',
+   calc:function(b){var A=avgDay(b),kl=A.waterKl*7*.12,kwh=kl*P.pump;
+     return{kwh:kwh,kl:kl,kg:kwh*P.grid,fx:nf(A.waterKl*7)+' kL/wk × 12% saved × '+P.pump+' kWh/kL × '+P.grid};}},
+  {id:'segregate',name:'Run a waste segregation drive (+30 points)',effort:'Medium',
+   why:'Composting wet waste and sending dry waste to recyclers avoids landfill methane and virgin material.',
+   calc:function(b){var dl=Math.min(.30,.95-b.seg),A=avgDay(b),kg=0;
+     CATS.forEach(function(c){kg+=A.cats[c]*7*dl*(FACT[c].mixed-FACT[c].seg);});
+     return{kwh:0,kg:kg,fx:nf(CATS.reduce(function(s,c){return s+A.cats[c];},0)*7)+' kg/wk × '+pc(dl)+' more segregated × (mixed − segregated factor)'};}},
+  {id:'solar',name:'Add 10 kWp of rooftop solar',effort:'Capex',
+   why:'The largest single saving, but it needs budget and roof space. Starts paying back through the pilot.',
+   calc:function(b){var kwh=10*4.3*7;return{kwh:kwh,kg:kwh*P.grid,fx:'10 kWp × 4.3 kWh/kWp/day × 7 days × '+P.grid};}}
+];
+function actionPoints(kg){return Math.round(kg*2);}
+
+/* ================= STATE ================= */
+var KEY='greenloop-demo-v1';
+var S={adopted:{},points:{ha:1240,hb:1385,hc:910,ap:1090,sq:760,ac:0},logs:[]};
+var U={view:'overview',scope:'all',v1:'chart',v2:'chart',scan:{item:'bottle',kg:.5,block:'ha',photo:null,done:false}};
+var scanResult=null,scanPending=false;
+try{var raw=localStorage.getItem(KEY);if(raw){var p0=JSON.parse(raw);S.adopted=p0.adopted||{};S.points=Object.assign(S.points,p0.points||{});S.logs=p0.logs||[];}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+var apiReady=false,remoteScope=null,remoteLoading=false;
+var REMOTE={dashboard:null,allDashboard:null,actions:null,leaderboard:null,method:null};
+function applyApiState(state){
+  if(!state)return;
+  S.adopted={};
+  (state.adopted||[]).forEach(function(x){S.adopted[x.block_id]=S.adopted[x.block_id]||{};S.adopted[x.block_id][x.action_id]=true;});
+  S.points=Object.assign(S.points,state.points||{});
+  S.logs=(state.logs||[]).map(function(x){return{item:x.item_label||x.item||'Waste item',kg:x.weight_kg||x.kg||0,block:x.block_name||x.block||'',saved:x.co2e_saved_kg||x.saved||0,pts:x.points||x.pts||0};});
+  save();
+}
+function applyRemoteMethod(data){
+  if(!data)return;
+  REMOTE.method=data;
+  if(data.factors){P.grid=data.factors.grid_kg_co2e_per_kwh;P.pump=data.factors.pump_kwh_per_kl;}
+  if(data.waste_factors)CATS.forEach(function(c){var f=data.waste_factors[c];if(f){FACT[c].mixed=f.mixed;FACT[c].seg=f.segregated;}});
+  memo={};
+}
+function refreshRemote(force){
+  if(!apiReady||remoteLoading)return;
+  if(!force&&remoteScope===U.scope)return;
+  var requestedScope=U.scope;remoteScope=requestedScope;remoteLoading=true;
+  var offset=new Date().getTimezoneOffset(),q='?scope='+encodeURIComponent(U.scope);
+  Promise.all([
+    fetch('/api/dashboard'+q+'&utc_offset_minutes='+offset).then(function(r){if(!r.ok)throw new Error('dashboard '+r.status);return r.json();}),
+    fetch('/api/dashboard?scope=all&utc_offset_minutes='+offset).then(function(r){if(!r.ok)throw new Error('campus dashboard '+r.status);return r.json();}),
+    fetch('/api/actions'+q).then(function(r){if(!r.ok)throw new Error('actions '+r.status);return r.json();}),
+    fetch('/api/leaderboard').then(function(r){if(!r.ok)throw new Error('leaderboard '+r.status);return r.json();}),
+    fetch('/api/method').then(function(r){if(!r.ok)throw new Error('method '+r.status);return r.json();})
+  ]).then(function(items){REMOTE.dashboard=items[0];REMOTE.allDashboard=items[1];REMOTE.actions=items[2];REMOTE.leaderboard=items[3];applyRemoteMethod(items[4]);render();})
+    .catch(function(){remoteScope=null;toast('Could not refresh the backend data.');})
+    .finally(function(){remoteLoading=false;if(apiReady&&requestedScope!==U.scope)refreshRemote(false);});
+}
+function refreshDashboard(){
+  if(!apiReady)return;
+  fetch('/api/dashboard?scope='+encodeURIComponent(U.scope)+'&utc_offset_minutes='+new Date().getTimezoneOffset()).then(function(r){if(!r.ok)throw new Error('dashboard');return r.json();}).then(function(d){REMOTE.dashboard=d;if(U.scope==='all')REMOTE.allDashboard=d;if(U.view==='overview'){var hb=$('#heroBlock'),ll=$('#liveList');if(hb)hb.innerHTML=heroHTML();if(ll)ll.innerHTML=liveHTML();drawCharts();}}).catch(function(){});
+}
+function syncApi(url,options){
+  if(!apiReady)return;
+  fetch(url,options||{}).then(function(r){if(!r.ok)throw new Error('API '+r.status);return r.json();}).then(function(data){if(data.state)applyApiState(data.state);else if(data.points||data.adopted)applyApiState(data);refreshRemote(true);render();}).catch(function(){toast('Could not sync with the backend. Your changes remain in this browser.');});
+}
+function refreshClassification(){
+  if(!apiReady||scanPending)return;
+  scanPending=true;
+  fetch('/api/waste/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sample_item:U.scan.item,weight_kg:U.scan.kg})})
+    .then(function(r){if(!r.ok)throw new Error('classification '+r.status);return r.json();})
+    .then(function(data){scanResult=data;scanPending=false;if(U.view==='scan')render();})
+    .catch(function(){toast('Could not get the waste estimate from the backend.');})
+    .finally(function(){scanPending=false;});
+}
+if(location.protocol!=='file:')fetch('/api/state').then(function(r){if(!r.ok)throw new Error('API unavailable');return r.json();}).then(function(state){apiReady=true;applyApiState(state);refreshRemote(true);render();}).catch(function(){});
+function isAdopted(b,a){return !!(S.adopted[b.id]&&S.adopted[b.id][a.id]);}
+function adoptedKgDay(b){var s=0;ACTIONS.forEach(function(a){if(isAdopted(b,a)){var c=a.calc(b);if(c)s+=c.kg/7;}});return s;}
+function scopeBlocks(){return U.scope==='all'?BLOCKS:BLOCKS.filter(function(b){return b.id===U.scope;});}
+function scopeName(){return U.scope==='all'?'whole campus':BLOCKS.filter(function(b){return b.id===U.scope;})[0].name;}
+function ranking(){
+  return BLOCKS.filter(function(b){return b.ranked!==false;}).map(function(b){
+    var a=avgDay(b),adj=adoptedKgDay(b);
+    return{b:b,measured:a.kgNet/b.people,eff:(a.kgNet-adj)/b.people,pts:S.points[b.id]||0,n:ACTIONS.filter(function(x){return isAdopted(b,x);}).length};
+  }).sort(function(x,y){return x.eff-y.eff;});
+}
+function scopeCalc(a,bl){
+  var kg=0,kwh=0,kl=0,n=0,adopted=0,fx=null,per=[];
+  bl.forEach(function(b){var c=a.calc(b);if(!c)return;n++;kg+=c.kg;kwh+=c.kwh||0;kl+=c.kl||0;if(isAdopted(b,a))adopted++;fx=fx||c.fx;per.push({b:b,kg:c.kg});});
+  if(!n)return null;
+  return{kg:kg,kwh:kwh,kl:kl,n:n,adopted:adopted===n,fx:n>1?'Sum over '+n+' blocks. Example, '+per[0].b.name+': '+fx:fx,per:per};
+}
+function hNow(){var d=new Date();return d.getHours()+d.getMinutes()/60+d.getSeconds()/3600;}
+function liveKw(b){return loadKw(b,0,Math.floor(hNow()))*(1+.03*Math.sin(Date.now()/9000+b.seed));}
+function liveSolar(b){return solarKw(b,0,Math.floor(hNow()));}
+function sum(bl,fn){return bl.reduce(function(s,b){return s+fn(b);},0);}
+/*__DOM__*/
+if(typeof document==='undefined'){module.exports={dayTotals:dayTotals,avgDay:avgDay,BLOCKS:BLOCKS,ACTIONS:ACTIONS,P:P,FACT:FACT,CATS:CATS,ranking:ranking,scopeCalc:scopeCalc};return;}
+
+/* ================= VIEW HELPERS ================= */
+function $(s,r){return(r||document).querySelector(s);}
+var view=$('#view'),tabsEl=$('#tabs'),scopeEl=$('#scope'),toastEl=$('#toast'),toastT;
+function toast(msg){toastEl.textContent=msg;toastEl.classList.add('on');clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove('on');},3200);}
+var TABS=[['overview','Overview'],['actions','Actions'],['leaderboard','Leaderboard'],['scan','Waste scan'],['method','Method']];
+tabsEl.innerHTML=TABS.map(function(t){return '<button role="tab" data-tab="'+t[0]+'" id="tab-'+t[0]+'">'+t[1]+'</button>';}).join('');
+scopeEl.innerHTML='<option value="all">Whole campus</option>'+BLOCKS.map(function(b){return '<option value="'+b.id+'">'+b.name+'</option>';}).join('');
+var h0=(location.hash||'').replace('#','');if(TABS.some(function(t){return t[0]===h0;}))U.view=h0;
+
+/* ================= CHARTS ================= */
+function niceMax(v){var p=Math.pow(10,Math.floor(Math.log10(v||1))),f=v/p,n=f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10;return n*p;}
+function sv(tag,attrs,inner){var s='<'+tag;for(var k in attrs)s+=' '+k+'="'+attrs[k]+'"';return s+'>'+(inner||'')+'</'+tag+'>';}
+function tipPos(host,tip,px,py){
+  var w=host.clientWidth,tw=tip.offsetWidth,x=px+14;if(x+tw>w)x=px-tw-14;if(x<0)x=0;
+  tip.style.left=x+'px';tip.style.top=Math.max(0,py-10)+'px';
+}
+function fmtHour(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);if(mm===60){hh++;mm=0;}return String(hh%24).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
+
+function chartLoad(host){
+  var bl=scopeBlocks(),h=hNow(),n=Math.floor(h),pts=[];
+  if(REMOTE.dashboard&&Array.isArray(REMOTE.dashboard.hourly)&&REMOTE.dashboard.scope===U.scope){pts=REMOTE.dashboard.hourly.map(function(p){return{x:p.hour,load:p.grid_load_kw,solar:p.solar_generation_kw,now:p.now};});}
+  else {for(var i=0;i<n;i++)pts.push({x:i+.5,load:sum(bl,function(b){return loadKw(b,0,i);}),solar:sum(bl,function(b){return solarKw(b,0,i);})});pts.push({x:h,load:sum(bl,liveKw),solar:sum(bl,liveSolar),now:true});}
+  if(U.v1==='table'){
+    host.innerHTML='<div class="tablewrap"><table><thead><tr><th>Hour</th><th>Grid load (kW)</th><th>Solar (kW)</th></tr></thead><tbody>'+
+      pts.slice().reverse().map(function(p){return '<tr><td>'+(p.now?'Now ':'')+fmtHour(p.x)+'</td><td>'+nf(p.load,1)+'</td><td>'+nf(p.solar,1)+'</td></tr>';}).join('')+'</tbody></table></div>';
+    return;
+  }
+  var W=host.clientWidth||600,H=260,m={l:40,r:16,t:14,b:26},iw=W-m.l-m.r,ih=H-m.t-m.b;
+  var ymax=niceMax(Math.max.apply(null,pts.map(function(p){return Math.max(p.load,p.solar);}))*1.08);
+  function X(hh){return m.l+iw*hh/24;} function Y(v){return m.t+ih*(1-v/ymax);}
+  var s='';
+  for(var t=0;t<=4;t++){var v=ymax*t/4,y=Y(v);s+=sv('line',{x1:m.l,x2:W-m.r,y1:y,y2:y,style:'stroke:var(--'+(t===0?'axis':'grid')+');stroke-width:1'});s+=sv('text',{x:m.l-8,y:y+4,'text-anchor':'end'},nf(v,v<10&&t?1:0));}
+  [0,6,12,18,24].forEach(function(hh){s+=sv('text',{x:X(hh),y:H-8,'text-anchor':hh===0?'start':hh===24?'end':'middle'},fmtHour(hh));});
+  var series=[{k:'load',c:'--s1',n:'Grid load'},{k:'solar',c:'--s4',n:'Solar'}];
+  series.forEach(function(se){
+    var d='M'+pts.map(function(p){return X(p.x).toFixed(1)+','+Y(p[se.k]).toFixed(1);}).join(' L');
+    if(pts.length>1){
+      s+=sv('path',{d:d+' L'+X(pts[pts.length-1].x).toFixed(1)+','+Y(0)+' L'+X(pts[0].x).toFixed(1)+','+Y(0)+' Z',style:'fill:var('+se.c+');opacity:.10;stroke:none'});
+      s+=sv('path',{d:d,style:'fill:none;stroke:var('+se.c+');stroke-width:2;stroke-linejoin:round;stroke-linecap:round'});
+    }
+  });
+  var last=pts[pts.length-1],placed=[];
+  series.forEach(function(se){
+    var cx=X(last.x),cy=Y(last[se.k]);
+    s+=sv('circle',{cx:cx,cy:cy,r:4,style:'fill:var('+se.c+');stroke:var(--surface);stroke-width:2'});
+    var ly=cy-11;if(placed.some(function(q){return Math.abs(q-ly)<14;}))ly=cy+19;placed.push(ly);
+    s+=sv('text',{x:cx>W-110?cx+2:cx+2,y:ly,'text-anchor':cx>W-120?'end':'start',class:'lab'},se.n+' '+nf(last[se.k])+' kW');
+  });
+  s+='<g id="xh" style="display:none">'+sv('line',{id:'xhl',y1:m.t,y2:m.t+ih,style:'stroke:var(--axis);stroke-width:1'})+sv('circle',{id:'xhd1',r:4,style:'fill:var(--s1);stroke:var(--surface);stroke-width:2'})+sv('circle',{id:'xhd2',r:4,style:'fill:var(--s4);stroke:var(--surface);stroke-width:2'})+'</g>';
+  s+=sv('rect',{id:'xov',x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});
+  host.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Grid load and solar generation in kilowatts for each hour today">'+s+'</svg><div class="tip" style="display:none"></div>';
+  var ov=$('#xov',host),tip=$('.tip',host),xh=$('#xh',host);
+  ov.addEventListener('pointermove',function(e){
+    var r=host.getBoundingClientRect(),px=(e.clientX-r.left)*W/r.width,hh=(px-m.l)/iw*24,best=pts[0];
+    pts.forEach(function(p){if(Math.abs(p.x-hh)<Math.abs(best.x-hh))best=p;});
+    xh.style.display='';var cx=X(best.x);
+    var l=$('#xhl',host);l.setAttribute('x1',cx);l.setAttribute('x2',cx);
+    var d1=$('#xhd1',host),d2=$('#xhd2',host);d1.setAttribute('cx',cx);d1.setAttribute('cy',Y(best.load));d2.setAttribute('cx',cx);d2.setAttribute('cy',Y(best.solar));
+    tip.style.display='';
+    tip.innerHTML='<b>'+(best.now?'Now, ':'')+fmtHour(best.x)+'</b><i style="background:var(--s1)"></i>Grid load '+nf(best.load,1)+' kW<br><i style="background:var(--s4)"></i>Solar '+nf(best.solar,1)+' kW';
+    tipPos(host,tip,cx*r.width/W,Y(best.load)*r.height/H);
+  });
+  ov.addEventListener('pointerleave',function(){tip.style.display='none';xh.style.display='none';});
+}
+
+function roundTop(x,y,w,h,r){r=Math.min(r,h,w/2);return 'M'+x+','+(y+h)+' L'+x+','+(y+r)+' Q'+x+','+y+' '+(x+r)+','+y+' L'+(x+w-r)+','+y+' Q'+(x+w)+','+y+' '+(x+w)+','+(y+r)+' L'+(x+w)+','+(y+h)+' Z';}
+function chartWeek(host){
+  var bl=scopeBlocks(),hn=hNow(),days=[],names=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  if(REMOTE.dashboard&&Array.isArray(REMOTE.dashboard.history)&&REMOTE.dashboard.scope===U.scope){days=REMOTE.dashboard.history.map(function(t){return{label:t.label,kgElec:t.kg_electricity,kgWaste:t.kg_waste,kgWater:t.kg_water,kgSolar:t.kg_solar_avoided,kgGross:t.kg_gross,kgNet:t.kg_net};});}
+  else for(var d=6;d>=0;d--){var dt=new Date();dt.setDate(dt.getDate()-d);var t=dayTotals(bl,d,d===0?hn:24);t.label=d===0?'Today':names[dt.getDay()];days.push(t);}
+  if(U.v2==='table'){
+    host.innerHTML='<div class="tablewrap"><table><thead><tr><th>Day</th><th>Electricity</th><th>Waste</th><th>Water</th><th>Solar avoided</th><th>Net</th></tr></thead><tbody>'+
+      days.slice().reverse().map(function(t){return '<tr><td>'+t.label+'</td><td>'+nf(t.kgElec)+'</td><td>'+nf(t.kgWaste)+'</td><td>'+nf(t.kgWater)+'</td><td>−'+nf(t.kgSolar)+'</td><td><b>'+nf(t.kgNet)+'</b></td></tr>';}).join('')+'</tbody></table></div>';
+    return;
+  }
+  var W=host.clientWidth||600,H=260,m={l:44,r:12,t:22,b:26},iw=W-m.l-m.r,ih=H-m.t-m.b;
+  var ymax=niceMax(Math.max.apply(null,days.map(function(t){return t.kgGross;}))*1.08);
+  function Y(v){return m.t+ih*(1-v/ymax);}
+  var slot=iw/7,bw=Math.min(24,slot*.55),s='';
+  for(var k=0;k<=4;k++){var v=ymax*k/4,y=Y(v);s+=sv('line',{x1:m.l,x2:W-m.r,y1:y,y2:y,style:'stroke:var(--'+(k===0?'axis':'grid')+');stroke-width:1'});s+=sv('text',{x:m.l-8,y:y+4,'text-anchor':'end'},v>=1000?nf(v/1000,v%1000?1:0)+'K':nf(v));}
+  var keys=[['kgElec','--s1'],['kgWaste','--s2'],['kgWater','--s3']];
+  days.forEach(function(t,i){
+    var cx=m.l+slot*(i+.5),x=cx-bw/2,cum=0;
+    keys.forEach(function(kc,j){
+      var v=t[kc[0]],yt=Y(cum+v),yb=Y(cum)-(j>0?2:0),h=yb-yt;
+      if(h>0.5){s+=sv('path',{d:j===keys.length-1?roundTop(x,yt,bw,h,4):'M'+x+','+yt+' h'+bw+' v'+h+' h'+(-bw)+' Z',style:'fill:var('+kc[1]+')'});}
+      cum+=v;
+    });
+    s+=sv('text',{x:cx,y:H-8,'text-anchor':'middle',class:i===6?'lab':''},t.label);
+    if(i===6)s+=sv('text',{x:cx,y:Y(t.kgGross)-7,'text-anchor':'middle',class:'lab'},nf(t.kgGross));
+    s+=sv('rect',{x:m.l+slot*i,y:m.t,width:slot,height:ih,fill:'transparent','data-i':i});
+  });
+  host.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Gross emissions by source for the last seven days in kilograms of CO2 equivalent">'+s+'</svg><div class="tip" style="display:none"></div>';
+  var tip=$('.tip',host);
+  host.querySelectorAll('rect[data-i]').forEach(function(r){
+    r.addEventListener('pointermove',function(e){
+      var t=days[+r.getAttribute('data-i')],hb=host.getBoundingClientRect();
+      tip.style.display='';
+      tip.innerHTML='<b>'+t.label+'</b><i style="background:var(--s1)"></i>Electricity '+nf(t.kgElec)+' kg<br><i style="background:var(--s2)"></i>Waste '+nf(t.kgWaste)+' kg<br><i style="background:var(--s3)"></i>Water pumping '+nf(t.kgWater)+' kg<br><i style="background:var(--s4)"></i>Solar avoided −'+nf(t.kgSolar)+' kg<br><b style="margin:3px 0 0">Net '+nf(t.kgNet)+' kg</b>';
+      tipPos(host,tip,e.clientX-hb.left,e.clientY-hb.top);
+    });
+    r.addEventListener('pointerleave',function(){tip.style.display='none';});
+  });
+}
+function drawCharts(){var a=$('#c1'),b=$('#c2');if(a)chartLoad(a);if(b)chartWeek(b);}
+
+/* ================= VIEWS ================= */
+function heroHTML(){
+  var bl=scopeBlocks(),h=hNow(),local=dayTotals(bl,0,h),y=dayTotals(bl,1,h),d=REMOTE.dashboard&&REMOTE.dashboard.scope===U.scope?REMOTE.dashboard:null,t=local,dl=y.kgNet?(local.kgNet-y.kgNet)/y.kgNet*100:0,adj=sum(bl,adoptedKgDay);
+  if(d){var z=d.totals;t={elecKwh:z.electricity_kwh,solarKwh:z.solar_kwh,wasteKg:z.waste_kg,waterKl:z.water_kl,kgElec:z.kg_electricity,kgWaste:z.kg_waste,kgWater:z.kg_water,kgSolar:z.kg_solar_avoided,kgNet:z.kg_net};dl=z.comparison_kg_net?(z.kg_net-z.comparison_kg_net)/z.comparison_kg_net*100:0;adj=d.adopted_savings_kg_per_day;}
+  var good=dl<=0;
+  var rows=[['Electricity',nf(t.elecKwh)+' kWh × '+P.grid,t.kgElec,'--s1',''],
+    ['Waste',nf(t.wasteKg)+' kg × factor per category',t.kgWaste,'--s2',''],
+    ['Water pumping',nf(t.waterKl,1)+' kL × '+P.pump+' kWh/kL × '+P.grid,t.kgWater,'--s3',''],
+    ['Solar avoided',nf(t.solarKwh)+' kWh × '+P.grid,-t.kgSolar,'--s4','']];
+  return '<div class="hero-num"><strong>'+nf(t.kgNet)+'</strong><span>kg '+CO2+'</span></div>'+
+    '<div class="delta '+(good?'good':'bad')+'"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="'+(good?'M2 4l4 5 4-5z':'M2 8l4-5 4 5z')+'" fill="currentColor"/></svg>'+nf(Math.abs(dl),1)+'% '+(good?'lower':'higher')+' than this time yesterday</div>'+
+    (adj>0?'<p class="proj">Adopted actions take about '+nf(adj)+' kg '+CO2+' off each day once they are running.</p>':'')+
+    '<ul class="ledger">'+rows.map(function(r){return '<li><i class="sw" style="background:var('+r[3]+')"></i><span class="nm">'+r[0]+'<span class="bs">'+r[1]+'</span></span><span class="v">'+(r[2]<0?'−':'')+nf(Math.abs(r[2]))+' kg</span></li>';}).join('')+
+    '<li class="net"><i></i><span class="nm">Net emitted</span><span class="v">'+nf(t.kgNet)+' kg</span></li></ul>';
+}
+function liveHTML(){
+  var data=REMOTE.dashboard&&REMOTE.dashboard.blocks;
+  return BLOCKS.map(function(b){
+    var row=data&&data.filter(function(x){return x.id===b.id;})[0],kw=row?row.grid_load_kw:liveKw(b),sol=row?row.solar_generation_kw:liveSolar(b);
+    return '<li class="'+(U.scope===b.id?'sel':'')+'"><span><span class="nm">'+b.name+'</span><br><span class="meta">'+b.people+' people'+(b.kwp?' · '+nf(sol,1)+' kW solar':' · no solar')+'</span></span><span class="kw">'+nf(kw,1)+' kW</span><span class="meter"><i style="width:'+clamp(kw/b.peak*100,2,100).toFixed(0)+'%"></i></span></li>';
+  }).join('');
+}
+function panelHead(title,sub,key,cur){
+  return '<div class="ph"><div><h2>'+title+'</h2><p class="sub">'+sub+'</p></div><div class="seg" data-chart="'+key+'"><button data-v="chart" aria-pressed="'+(cur==='chart')+'">Chart</button><button data-v="table" aria-pressed="'+(cur==='table')+'">Table</button></div></div>';
+}
+function viewOverview(){
+  return '<div class="rowA"><section class="panel" aria-labelledby="hh"><p class="eyebrow" id="hh">Net emissions today so far · '+scopeName()+'</p><div id="heroBlock">'+heroHTML()+'</div></section>'+
+    '<section class="panel"><h2>Live load by block</h2><p class="sub">Updates every few seconds from simulated meters.</p><ul class="live-list" id="liveList">'+liveHTML()+'</ul></section></div>'+
+    '<div class="row2" style="margin-top:16px"><section class="panel">'+panelHead('Grid load against solar','Kilowatts for each hour today, '+scopeName(),'v1',U.v1)+
+    '<div class="legend"><span><i style="background:var(--s1)"></i>Grid load</span><span><i style="background:var(--s4)"></i>Solar generation</span></div><div class="chart" id="c1"></div></section>'+
+    '<section class="panel">'+panelHead('Where the emissions come from','Gross kg '+CO2+' per day by source, last 7 days','v2',U.v2)+
+    '<div class="legend"><span><i style="background:var(--s1)"></i>Electricity</span><span><i style="background:var(--s2)"></i>Waste</span><span><i style="background:var(--s3)"></i>Water pumping</span></div><div class="chart" id="c2"></div></section></div>';
+}
+function effortChip(e){return '<span class="chip">'+e+'</span>';}
+function viewActions(){
+  var bl=scopeBlocks(),remote=Array.isArray(REMOTE.actions),list=ACTIONS.map(function(a){var c=scopeCalc(a,bl),r=remote&&REMOTE.actions.filter(function(x){return x.id===a.id;})[0];if(r&&c){c.kg=r.kg_co2e_week;c.kwh=r.kwh_week;c.kl=r.water_kl_week;c.adopted=r.adopted;}return{a:a,c:c,r:r};}).filter(function(x){return x.c;});
+  var open=list.filter(function(x){return !x.c.adopted;}).sort(function(p,q){return q.c.kg-p.c.kg;}),top=open.slice(0,3),rest=open.slice(3),plan=list.filter(function(x){return x.c.adopted;});
+  var max=top.length?top[0].c.kg:1,planKg=plan.reduce(function(s,x){return s+x.c.kg;},0);
+  var h='<section class="panel"><p class="eyebrow">Recommended for '+scopeName()+'</p><h2 style="margin-top:4px">Top actions by '+CO2+' saved per week</h2><p class="sub">Ranked from this block’s own simulated usage, not generic tips. Adopting an action moves the leaderboard and earns green points.</p>';
+  h+='<ol class="recs">'+top.map(function(x,i){
+    var kgw=x.c.kg;
+    return '<li class="rec"><span class="rk">'+(i+1)+'</span><div><div class="hd"><h3>'+x.a.name+'</h3>'+effortChip(x.a.effort)+'</div><p class="why">'+x.a.why+'</p>'+
+      '<div class="big"><strong>'+nf(kgw)+'</strong><span>kg '+CO2+' per week</span>'+(x.c.kwh>0?'<span class="sub">· '+nf(x.c.kwh)+' kWh</span>':'')+(x.c.kl?'<span class="sub">· '+nf(x.c.kl)+' kL water</span>':'')+'</div>'+
+      '<div class="bar"><i style="width:'+Math.max(3,kgw/max*100).toFixed(0)+'%"></i></div><p class="fx">'+x.c.fx+'</p>'+
+      '<div class="ft"><span class="chip pts">+'+nf(actionPoints(kgw))+' green points</span><button class="btn" data-adopt="'+x.a.id+'">Adopt this action</button></div></div></li>';
+  }).join('')+'</ol>';
+  if(!top.length)h+='<p class="sub" style="margin-top:14px">Every action that applies here is already in the plan.</p>';
+  h+='</section>';
+  if(rest.length)h+='<section class="panel" style="margin-top:16px"><h2>Also available</h2><ul class="minor">'+rest.map(function(x){return '<li><span>'+x.a.name+'<br><span class="sub">'+x.a.effort+'</span></span><span class="num">'+nf(x.c.kg)+' kg/wk</span><button class="btn ghost" data-adopt="'+x.a.id+'">Adopt</button></li>';}).join('')+'</ul></section>';
+  if(plan.length)h+='<section class="panel" style="margin-top:16px"><h2>In your plan</h2><p class="sub">Together these save about '+nf(planKg)+' kg '+CO2+' a week, around '+nf(planKg*52/1000,1)+' tonnes a year.</p><ul class="minor">'+plan.map(function(x){return '<li><span>'+x.a.name+'</span><span class="num">'+nf(x.c.kg)+' kg/wk</span><button class="btn ghost" data-remove="'+x.a.id+'">Remove</button></li>';}).join('')+'</ul></section>';
+  return h;
+}
+function viewBoard(){
+  var r=Array.isArray(REMOTE.leaderboard)?REMOTE.leaderboard.map(function(x){return{b:BLOCKS.filter(function(b){return b.id===x.block_id;})[0],measured:x.measured_kg_co2e_person_day,eff:x.effective_kg_co2e_person_day,pts:x.green_points,n:x.adopted_actions};}):ranking(),mx=Math.max.apply(null,r.map(function(x){return x.eff;}));
+  return '<section class="panel"><p class="eyebrow">Block against block</p><h2 style="margin-top:4px">Net '+CO2+' per person per day</h2><p class="sub">Last 7 days, after solar and after any adopted actions. Lower is better. Per person keeps big and small blocks comparable.</p>'+
+    '<ol class="board">'+r.map(function(x,i){
+      return '<li><span class="rk">'+(i+1)+'</span><div><span class="nm">'+x.b.name+'</span><div class="bar"><i style="width:'+(x.eff/mx*100).toFixed(0)+'%"></i></div></div>'+
+        '<div class="val"><strong>'+nf(x.eff,2)+'</strong> kg<br><span class="chip pts">'+nf(x.pts)+' pts</span></div>'+
+        '<div class="sub2"><span>'+x.b.people+' people</span><span>Measured '+nf(x.measured,2)+' kg</span><span>'+x.n+' action'+(x.n===1?'':'s')+' adopted</span></div></li>';
+    }).join('')+'</ol><p class="note">Academic Block is not ranked because its usage pattern is different from a residence. Green points: 2 per kg '+CO2+' a week saved by an adopted action, 10 per kg '+CO2+' saved by a logged segregation. Starting balances stand in for earlier weeks and are simulated.</p></section>';
+}
+var ITEMS={
+  bottle:{label:'Water bottle',cls:'plastic',p:{plastic:.93,glass:.04,metal:.01,paper:.01,organic:.01},svg:'<path d="M26 8h12v8l6 8v30a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4V24l6-8z"/><path d="M20 34h24"/>'},
+  paper:{label:'Newspaper',cls:'paper',p:{paper:.96,plastic:.02,organic:.01,glass:.005,metal:.005},svg:'<rect x="10" y="12" width="44" height="40" rx="3"/><path d="M18 22h16M18 30h28M18 38h28M18 45h20"/>'},
+  jar:{label:'Glass jar',cls:'glass',p:{glass:.88,plastic:.09,metal:.01,paper:.01,organic:.01},svg:'<rect x="20" y="8" width="24" height="8" rx="2"/><path d="M22 16v4c-6 4-8 8-8 14v16a4 4 0 0 0 4 4h28a4 4 0 0 0 4-4V34c0-6-2-10-8-14v-4"/>'},
+  can:{label:'Tin can',cls:'metal',p:{metal:.90,plastic:.06,glass:.02,paper:.01,organic:.01},svg:'<ellipse cx="32" cy="14" rx="15" ry="5"/><path d="M17 14v36c0 3 7 5 15 5s15-2 15-5V14"/><path d="M17 26c0 3 7 5 15 5s15-2 15-5"/>'},
+  peel:{label:'Banana peel',cls:'organic',p:{organic:.94,paper:.03,plastic:.02,glass:.005,metal:.005},svg:'<path d="M14 40c10 10 28 8 38-8-4 4-10 6-16 5-8-1-14-5-16-14-4 6-6 12-6 17z"/><path d="M48 24l4-6"/>'}
+};
+function viewScan(){
+  var sc=U.scan,it=ITEMS[sc.item],f=FACT[it.cls],result=scanResult&&scanResult.sample_item===sc.item&&scanResult.weight_kg===sc.kg?scanResult:null,save_=result?result.co2e_saved_kg:sc.kg*(f.mixed-f.seg),label=result?result.item_label:it.label,category=result?result.category:it.cls,bin=result?result.bin:f.bin,probsData=result?result.probabilities:it.p;
+  var chips=Object.keys(ITEMS).map(function(k){return '<button data-item="'+k+'" aria-pressed="'+(k===sc.item)+'">'+ITEMS[k].label+'</button>';}).join('');
+  var probs=CATS.slice().sort(function(a,b){return probsData[b]-probsData[a];}).map(function(c){return '<div><span>'+FACT[c].name+'</span><span class="b"><i style="width:'+(probsData[c]*100).toFixed(0)+'%"></i></span><span class="n">'+(probsData[c]*100).toFixed(1)+'%</span></div>';}).join('');
+  var opts=BLOCKS.filter(function(b){return b.ranked!==false;}).map(function(b){return '<option value="'+b.id+'"'+(b.id===sc.block?' selected':'')+'>'+b.name+'</option>';}).join('');
+  return '<div class="scan"><section class="panel"><h2>Scan a waste item</h2><p class="sub">Choose the closest sample category. An uploaded photo is saved only as a local preview; it is not analysed.</p>'+
+    '<div class="stage" style="margin-top:12px">'+(sc.photo?'<img src="'+sc.photo+'" alt="Uploaded waste photo preview">':'<svg viewBox="0 0 64 64" aria-hidden="true">'+it.svg+'</svg>')+'</div>'+
+    '<div class="chips" role="group" aria-label="Sample items">'+chips+'</div>'+
+    '<div class="fields"><label class="field">Photo (optional)<input type="file" id="photo" accept="image/*"></label>'+(sc.photo?'<button class="btn ghost" data-clear="1" style="align-self:flex-end">Remove photo</button>':'')+'</div></section>'+
+    '<section class="panel"><div class="ph"><h2>Waste category estimate</h2><span class="chip">'+(scanPending?'Calculating…':'Software sample')+'</span></div>'+
+    '<div class="result"><p class="sub">Selected category</p><strong>'+FACT[category].name+'</strong> <span class="sub">· '+bin+'</span></div>'+
+    '<div class="probs" aria-label="Class probabilities">'+probs+'</div>'+
+    '<p class="note">This estimate uses preset sample outputs, not a trained image model. Confirm the category before logging the item.</p>'+
+    '<div class="fields"><label class="field">Weight binned (kg)<input type="number" id="kg" min="0.05" max="50" step="0.05" value="'+sc.kg+'" style="width:120px"></label>'+
+    '<label class="field">Credit to<select id="scanBlock">'+opts+'</select></label></div>'+
+    '<p class="note">Binned separately instead of mixed: saves about <b>'+nf(save_,2)+' kg '+CO2+'</b> ('+f.mixed+' − '+f.seg+' kg/kg × '+sc.kg+' kg).</p>'+
+    '<div style="margin-top:12px"><button class="btn" data-log="1">Log it, +'+nf(Math.round(save_*10))+' points</button></div></section></div>'+
+    '<section class="panel" style="margin-top:16px"><h2>Recent logs</h2>'+(S.logs.length?'<ul class="loglist">'+S.logs.map(function(l){return '<li><span>'+l.item+', '+nf(l.kg,2)+' kg → '+l.block+'</span><span>'+nf(l.saved,2)+' kg '+CO2+' saved · +'+l.pts+' pts</span></li>';}).join('')+'</ul>':'<p class="sub" style="margin-top:6px">Nothing logged yet. Choose an item and press Log it.</p>')+'</section>';
+}
+function viewMethod(){
+  var ex=dayTotals(BLOCKS,0,hNow()),d=REMOTE.allDashboard;if(d){var z=d.totals;ex={elecKwh:z.electricity_kwh,solarKwh:z.solar_kwh,kgElec:z.kg_electricity,kgSolar:z.kg_solar_avoided,kgWaste:z.kg_waste,kgNet:z.kg_net};}
+  return '<div class="cols"><section class="panel"><h2>Core calculations</h2><p class="sub">The same five steps as the project deck, running on today’s simulated numbers.</p><ul class="calc">'+
+    '<li><b>Electricity</b><span class="mono">kWh × grid factor = '+nf(ex.elecKwh)+' × '+P.grid+' = '+nf(ex.kgElec)+' kg</span></li>'+
+    '<li><b>Solar offset</b><span class="mono">solar kWh × grid factor = '+nf(ex.solarKwh)+' × '+P.grid+' = '+nf(ex.kgSolar)+' kg</span></li>'+
+    '<li><b>Waste</b><span class="mono">kg × factor per category = '+nf(ex.kgWaste)+' kg</span></li>'+
+    '<li><b>Net score</b><span class="mono">emissions − avoided = '+nf(ex.kgNet)+' kg</span></li>'+
+    '<li><b>Saving</b><span class="mono">(current − optimized) × factor, shown per action</span></li></ul></section>'+
+    '<section class="panel"><h2>Editable factors</h2><p class="sub">Change a value and every figure recalculates. Defaults are rounded demo estimates. Check them against the cited tables before you publish any number.</p>'+
+    '<div class="fields"><label class="field">Grid factor (kg '+CO2+'/kWh), CEA baseline<input type="number" id="pGrid" step="0.01" min="0.1" max="1.5" value="'+P.grid+'" style="width:140px"></label>'+
+    '<label class="field">Pumping energy (kWh per kL)<input type="number" id="pPump" step="0.05" min="0.05" max="3" value="'+P.pump+'" style="width:140px"></label></div></section></div>'+
+    '<section class="panel" style="margin-top:16px"><h2>Waste factors</h2><div class="tablewrap"><table><thead><tr><th>Category</th><th>Mixed disposal</th><th>Segregated</th><th>Source family</th></tr></thead><tbody>'+
+    CATS.map(function(c){return '<tr><td>'+FACT[c].name+'</td><td>'+FACT[c].mixed+'</td><td>'+FACT[c].seg+'</td><td style="white-space:normal;text-align:left">'+FACT[c].src+'</td></tr>';}).join('')+'</tbody></table></div><p class="note">kg '+CO2+' per kg of waste. Segregated values below zero mean avoided emissions from recycling.</p></section>'+
+    '<section class="panel" style="margin-top:16px"><h2>How data moves</h2><ol class="flow"><li><b>Inputs</b>Software-generated meter, water and waste readings; category selected from sample items.</li><li><b>Category estimate</b>Preset sample output; uploaded image is preview-only.</li><li><b>Emission engine</b>kWh and kg of waste become kg '+CO2+'.</li><li><b>Recommender</b>Ranks actions by '+CO2+' saved.</li><li><b>Dashboard and rewards</b>Live score, leaderboard and points are persisted in Supabase.</li></ol></section>'+
+    '<section class="panel" style="margin-top:16px"><div class="ph"><div><h2>What is real and what is simulated</h2><p class="sub" style="margin-top:6px">Meter, water and waste readings, classifier probabilities and starting points are generated. The formulas, ranking and points logic are live.</p></div><button class="btn ghost" data-reset="1">Reset demo</button></div></section>';
+}
+var VIEWS={overview:viewOverview,actions:viewActions,leaderboard:viewBoard,scan:viewScan,method:viewMethod};
+function render(){
+  tabsEl.querySelectorAll('button').forEach(function(b){var on=b.getAttribute('data-tab')===U.view;b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1;});
+  scopeEl.value=U.scope; scopeEl.parentNode.style.display=(U.view==='leaderboard'||U.view==='scan'||U.view==='method')?'none':'';
+  view.innerHTML=VIEWS[U.view]();
+  if(U.view==='overview')drawCharts();
+  if(apiReady&&remoteScope!==U.scope)refreshRemote(false);
+  if(apiReady&&U.view==='scan'&&(!scanResult||scanResult.sample_item!==U.scan.item||scanResult.weight_kg!==U.scan.kg))refreshClassification();
+}
+
+/* ================= EVENTS ================= */
+tabsEl.addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(b){U.view=b.getAttribute('data-tab');render();}});
+scopeEl.addEventListener('change',function(){U.scope=scopeEl.value;render();});
+function adoptAll(id,on){
+  var a=ACTIONS.filter(function(x){return x.id===id;})[0],before=ranking().map(function(x){return x.b.id;}),gained=0;
+  scopeBlocks().forEach(function(b){
+    var c=a.calc(b);if(!c)return;S.adopted[b.id]=S.adopted[b.id]||{};
+    if(on&&!S.adopted[b.id][a.id]){S.adopted[b.id][a.id]=true;S.points[b.id]=(S.points[b.id]||0)+actionPoints(c.kg);gained+=actionPoints(c.kg);}
+    if(!on&&S.adopted[b.id][a.id]){delete S.adopted[b.id][a.id];S.points[b.id]=Math.max(0,(S.points[b.id]||0)-actionPoints(c.kg));gained-=actionPoints(c.kg);}
+  });
+  save();
+  syncApi('/api/actions/'+encodeURIComponent(id)+'/adopt'+(on?'':'?scope='+encodeURIComponent(U.scope)),{method:on?'POST':'DELETE',headers:{'Content-Type':'application/json'},body:on?JSON.stringify({scope:U.scope}):undefined});
+  var after=ranking().map(function(x){return x.b.id;}),moved='';
+  after.forEach(function(id2,i){if(before[i]!==id2&&!moved){var nm=BLOCKS.filter(function(b){return b.id===id2;})[0].name;moved=' '+nm+' is now #'+(i+1)+' on the leaderboard.';}});
+  toast((on?'Added to plan. +':'Removed from plan. ')+nf(Math.abs(gained))+' green points'+(on?'.':' returned.')+moved);
+  render();
+}
+view.addEventListener('click',function(e){
+  var t;
+  if((t=e.target.closest('[data-adopt]')))return adoptAll(t.getAttribute('data-adopt'),true);
+  if((t=e.target.closest('[data-remove]')))return adoptAll(t.getAttribute('data-remove'),false);
+  if((t=e.target.closest('[data-chart] button'))){var key=t.parentNode.getAttribute('data-chart');U[key]=t.getAttribute('data-v');t.parentNode.querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b===t);});return drawCharts();}
+  if((t=e.target.closest('[data-item]'))){U.scan.item=t.getAttribute('data-item');scanResult=null;render();refreshClassification();return;}
+  if(e.target.closest('[data-clear]')){U.scan.photo=null;return render();}
+  if(e.target.closest('[data-log]')){
+    var sc=U.scan,f=FACT[ITEMS[sc.item].cls],saved=sc.kg*(f.mixed-f.seg),pts=Math.round(saved*10),bl=BLOCKS.filter(function(b){return b.id===sc.block;})[0];
+    S.points[bl.id]=(S.points[bl.id]||0)+pts;S.logs.unshift({item:ITEMS[sc.item].label,kg:sc.kg,block:bl.name,saved:saved,pts:pts});S.logs=S.logs.slice(0,6);save();
+    syncApi('/api/waste/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sample_item:sc.item,block_id:sc.block,weight_kg:sc.kg})});
+    toast('Logged. '+bl.name+' earned '+pts+' green points.');return render();
+  }
+  if(e.target.closest('[data-reset]')){if(apiReady){fetch('/api/demo/reset',{method:'POST'}).then(function(r){if(!r.ok)throw new Error('reset unavailable');return r.json();}).then(function(){return fetch('/api/state');}).then(function(r){return r.json();}).then(function(state){applyApiState(state);toast('Demo reset to its starting state.');render();}).catch(function(){toast('Reset is available only in local demo mode.');});return;}S.adopted={};S.points={ha:1240,hb:1385,hc:910,ap:1090,sq:760,ac:0};S.logs=[];save();toast('Demo reset to its starting state.');return render();}
+});
+view.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.id==='photo'&&t.files&&t.files[0]){var fr=new FileReader();fr.onload=function(){U.scan.photo=fr.result;render();};fr.readAsDataURL(t.files[0]);}
+  if(t.id==='kg'){U.scan.kg=clamp(parseFloat(t.value)||.5,.05,50);scanResult=null;render();refreshClassification();}
+  if(t.id==='scanBlock'){U.scan.block=t.value;}
+  if(t.id==='pGrid'||t.id==='pPump'){var v=parseFloat(t.value);if(v>0){if(t.id==='pGrid')P.grid=v;else P.pump=v;}memo={};if(apiReady){var g=P.grid,p=P.pump;fetch('/api/factors',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({grid_kg_co2e_per_kwh:g,pump_kwh_per_kl:p})}).then(function(r){if(!r.ok)throw new Error('factor update '+r.status);return r.json();}).then(function(){toast('Emission factors saved to Supabase.');refreshRemote(true);}).catch(function(){toast('Could not save emission factors.');});}render();}
+});
+
+/* ================= LIVE TICK + RESIZE ================= */
+setInterval(function(){
+  if(U.view!=='overview')return;
+  if(apiReady)refreshDashboard();else{var hb=$('#heroBlock'),ll=$('#liveList');if(hb)hb.innerHTML=heroHTML();if(ll)ll.innerHTML=liveHTML();}
+},10000);
+setInterval(function(){if(U.view==='overview'){if(apiReady)refreshDashboard();else drawCharts();}},30000);
+var rt;if(window.ResizeObserver){new ResizeObserver(function(){clearTimeout(rt);rt=setTimeout(function(){if(U.view==='overview')drawCharts();},120);}).observe(view);}
+render();
+})();
+</script>
